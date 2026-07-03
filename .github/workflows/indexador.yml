@@ -1,0 +1,31 @@
+name: Sincronizador de Holders OgRats
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Clonar el repositorio
+      uses: actions/checkout@v3
+
+    - name: Configurar Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18
+        cache: 'npm'
+
+    - name: Instalar dependencias
+      run: npm install
+
+    - name: Ejecutar Indexador de Ronin a Supabase
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        RONIN_API_KEY: ${{ secrets.RONIN_API_KEY }}
+      run: node indexar.js
+      
