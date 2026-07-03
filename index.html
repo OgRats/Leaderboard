@@ -3,72 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OgRats Official Leaderboard</title>
+    <title>OgRats Live Leaderboard</title>
     <script src="https://unpkg.com/vue@3.4.0/dist/vue.global.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=400;600;700;800&display=swap');
-        
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { 
-            font-family: 'Plus Jakarta Sans', sans-serif; 
-            background-color: #030712; 
-            color: #f3f4f6; 
-            min-height: 100vh;
-            padding: 2rem 1rem;
-        }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #030712; color: #f3f4f6; min-height: 100vh; padding: 2rem 1rem; }
         .container { max-width: 1024px; margin: 0 auto; }
         .text-center { text-align: center; }
         .mb-8 { margin-bottom: 2rem; }
-        
-        h1 {
-            font-size: 2.25rem;
-            font-weight: 800;
-            letter-spacing: -0.025em;
-            background: linear-gradient(to right, #3b82f6, #10b981);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
+        h1 { font-size: 2.25rem; font-weight: 800; background: linear-gradient(to right, #3b82f6, #10b981); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .subtitle { font-size: 0.75rem; color: #9ca3af; margin-top: 0.5rem; }
-
-        /* Contador */
-        .counter-card {
-            background-color: #111827;
-            border: 1px solid #1f2937;
-            border-radius: 1rem;
-            padding: 1.5rem;
-            max-width: 400px;
-            margin: 0 auto 2rem auto;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
-        }
+        .counter-card { background-color: #111827; border: 1px solid #1f2937; border-radius: 1rem; padding: 1.5rem; max-width: 400px; margin: 0 auto 2rem auto; }
         .counter-title { font-size: 0.75rem; text-transform: uppercase; color: #9ca3af; font-weight: 600; margin-bottom: 0.5rem; }
         .grid-3 { display: grid; grid-template-cols: repeat(3, 1fr); gap: 0.5rem; }
         .time-box { background-color: #030712; padding: 0.75rem; border-radius: 0.75rem; border: 1px solid #1f2937; font-family: monospace; font-size: 1.875rem; font-weight: 700; color: #34d399; }
-        .time-label { display: block; font-size: 10px; color: #6b7280; font-family: sans-serif; text-transform: uppercase; margin-top: 0.25rem; }
-
-        /* Tabla */
-        .table-container {
-            background-color: #111827;
-            border: 1px solid #1f2937;
-            border-radius: 1rem;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            overflow: hidden;
-        }
-        .table-header-bar {
-            padding: 1rem;
-            background-color: #1f2937;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+        .time-label { display: block; font-size: 10px; color: #6b7280; text-transform: uppercase; margin-top: 0.25rem; }
+        .table-container { background-color: #111827; border: 1px solid #1f2937; border-radius: 1rem; overflow: hidden; }
+        .table-header-bar { padding: 1rem; background-color: #1f2937; display: flex; justify-content: space-between; align-items: center; }
         .table-title { font-size: 0.875rem; font-weight: 700; color: #d1d5db; }
         .table-badge { background-color: rgba(16, 185, 129, 0.1); color: #34d399; padding: 0.25rem 0.625rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
-        
         .overflow-x { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; text-align: left; }
-        th { padding: 1rem; background-color: #111827; border-bottom: 1px solid #1f2937; color: #9ca3af; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        th { padding: 1rem; background-color: #111827; border-bottom: 1px solid #1f2937; color: #9ca3af; font-size: 0.75rem; text-transform: uppercase; }
         td { padding: 1rem; border-bottom: 1px solid rgba(31, 41, 55, 0.4); font-size: 0.875rem; }
         tr:hover { background-color: rgba(31, 41, 55, 0.3); }
-        
         .text-center-cell { text-align: center; }
         .text-right-cell { text-align: right; }
         .font-mono { font-family: monospace; }
@@ -81,33 +40,23 @@
 <body>
 
     <div id="app" class="container">
-        
         <div class="text-center mb-8">
-            <h1>OgRats Live Leaderboard 🐀</h1>
-            <p class="subtitle">Sincronizado directamente con la red de Ronin</p>
+            <h1>OgRats Live Leaderboard </h1>
+            <p class="subtitle">Sincronizado automáticamente mediante el Indexador de Ronin</p>
         </div>
 
         <div class="counter-card text-center">
             <p class="counter-title">Próxima actualización de puntos (12:00 AM UTC)</p>
             <div class="grid-3">
-                <div class="time-box">
-                    <div>{{ tiempo.horas }}</div>
-                    <span class="time-label">Horas</span>
-                </div>
-                <div class="time-box">
-                    <div>{{ tiempo.minutos }}</div>
-                    <span class="time-label">Minutos</span>
-                </div>
-                <div class="time-box">
-                    <div>{{ tiempo.segundos }}</div>
-                    <span class="time-label">Segundos</span>
-                </div>
+                <div class="time-box"><div>{{ tiempo.horas }}</div><span class="time-label">Horas</span></div>
+                <div class="time-box"><div>{{ tiempo.minutos }}</div><span class="time-label">Minutos</span></div>
+                <div class="time-box"><div>{{ tiempo.segundos }}</div><span class="time-label">Segundos</span></div>
             </div>
         </div>
 
         <div v-if="!cargando && holdersOrdenados.length > 0" class="table-container">
             <div class="table-header-bar">
-                <span class="table-title">Top Real de Holders (Marketplace)</span>
+                <span class="table-title">Top Holders Reales en Vivo</span>
                 <span class="table-badge">1 OgRat = 1 Punto / Día</span>
             </div>
             <div class="overflow-x">
@@ -115,8 +64,8 @@
                     <thead>
                         <tr>
                             <th class="text-center-cell" style="width: 70px;">Pos</th>
-                            <th>Dirección Wallet (0x)</th>
-                            <th class="text-center-cell">NFTs Totales</th>
+                            <th>Dirección Wallet</th>
+                            <th class="text-center-cell">NFTs</th>
                             <th class="text-right-cell">Puntos</th>
                         </tr>
                     </thead>
@@ -126,33 +75,24 @@
                                 <span v-if="index === 0">🥇</span>
                                 <span v-else-if="index === 1">🥈</span>
                                 <span v-else-if="index === 2">🥉</span>
-                                <span v-else style="color: #6b7280; font-size: 0.75rem;">{{ index + 1 }}</span>
+                                <span v-else style="color: #6b7280;">{{ index + 1 }}</span>
                             </td>
                             <td class="font-mono">
                                 <a :href="'https://app.roninchain.com/address/' + holder.address" target="_blank" class="wallet-link">
                                     {{ formatearDireccion(holder.address) }}
                                 </a>
                             </td>
-                            <td class="text-center-cell" style="font-weight: bold; color: #e5e7eb;">
-                                {{ holder.balance }} <span style="font-size: 0.75rem; color: #4b5563; font-weight: normal;">Rats</span>
-                            </td>
-                            <td class="text-right-cell font-mono points">
-                                {{ holder.puntosCalculados }} <span style="font-size: 10px; color: #555; font-weight: normal;">pts</span>
-                            </td>
+                            <td class="text-center-cell" style="font-weight: bold;">{{ holder.balance }}</td>
+                            <td class="text-right-cell font-mono points">{{ holder.puntosCalculados }} pts</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <div v-else-if="cargando" class="status-msg">
-            ⏳ Sincronizando en tiempo real con el Marketplace de Ronin...
+        <div v-else class="status-msg">
+            {{ mensajeEstado }}
         </div>
-        
-        <div v-else class="status-msg" style="background-color: #111827; border: 1px solid #1f2937; border-radius: 1rem; max-width: 450px; margin: 0 auto; padding: 2rem;">
-            🔍 No se pudieron leer datos dinámicos en este momento. Revisa la consola o la configuración de tu API Key.
-        </div>
-
     </div>
 
     <script>
@@ -162,54 +102,64 @@
             setup() {
                 const cargando = ref(true);
                 const holders = ref([]);
+                const mensajeEstado = ref("⏳ Conectando con el mercado de Ronin...");
                 const tiempo = ref({ horas: "00", minutos: "00", segundos: "00" });
                 
-                // Fecha de inicio del conteo para los puntos (Año 2026)
                 const fechaInicioConteo = Math.floor(new Date("2026-06-25T00:00:00Z").getTime() / 1000);
-
-                // Configuración de tokens de acceso públicos
                 const contratoOgRats = "0x953e34637cc596b8195eb7fb83305402d3b9d000";
-                const API_KEY_RONIN = "gQUj546pZtgFbOz8DD1iT4AirKIkJnJJ"; 
 
-                const consultarMarketplaceAPI = async () => {
+                const consultarAPIAutomatico = async () => {
                     try {
-                        console.log("Iniciando consulta API mediante puente de desarrollo libre...");
-                        
-                        // Usamos un proxy público intermedio para evitar el bloqueo CORS del navegador
-                        const urlDestino = `https://api-gateway.skymavis.com/skynet/ronin/web3/v2/collections/${contratoOgRats}/tokens?limit=200`;
-                        const urlProxy = `https://cors-anywhere.herokuapp.com/${urlDestino}`;
-
-                        const response = await fetch(urlProxy, {
-                            method: "GET",
-                            headers: {
-                                "Accept": "application/json",
-                                "X-API-KEY": API_KEY_RONIN
+                        // Usamos GraphQL directo al subgrafo del marketplace que no tiene bloqueos de navegador
+                        const query = `
+                        {
+                            erc721Tokens(where: {contract: "${contratoOgRats}"}, limit: 100) {
+                                owners {
+                                    owner
+                                    balance
+                                }
                             }
-                        });
+                        }`;
 
-                        if (!response.ok) throw new Error(`Respuesta errónea del proxy: ${response.status}`);
+                        const response = await fetch("https://skynet-api.roninchain.com/graphql", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ query })
+                        });
 
                         const json = await response.json();
-                        const tokens = json.result || json.items || [];
-                        const mapaBalances = {};
+                        
+                        // Extraemos los dueños mapeados por el indexador público
+                        const dataOwners = json.data?.erc721Tokens?.owners || [];
 
-                        // Agrupamos dinámicamente los dueños de cada token de la colección
-                        tokens.forEach(token => {
-                            const owner = token.owner || token.minterAddress || "";
-                            if (owner && owner !== "0x0000000000000000000000000000000000000000") {
-                                const walletLcase = owner.toLowerCase();
-                                mapaBalances[walletLcase] = (mapaBalances[walletLcase] || 0) + 1;
-                            }
-                        });
+                        if(dataOwners.length === 0) {
+                            // Intento alternativo por si el subgrafo maneja otra entidad estándar
+                            const queryAlt = `{ tokens(where: { contract: "${contratoOgRats}" }, limit: 100) { owner } }`;
+                            const resAlt = await fetch("https://skynet-api.roninchain.com/graphql", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ query: queryAlt })
+                            });
+                            const jsonAlt = await resAlt.json();
+                            const tokensRaw = jsonAlt.data?.tokens || [];
+                            
+                            const conteo = {};
+                            tokensRaw.forEach(t => { if(t.owner) conteo[t.owner.toLowerCase()] = (conteo[t.owner.toLowerCase()] || 0) + 1; });
+                            holders.value = Object.keys(conteo).map(w => ({ address: w, balance: conteo[w] }));
+                        } else {
+                            holders.value = dataOwners.map(o => ({
+                                address: o.owner.toLowerCase(),
+                                balance: parseInt(o.balance || 1)
+                            })).filter(h => h.address !== "0x0000000000000000000000000000000000000000");
+                        }
 
-                        // Seteamos la lista limpia
-                        holders.value = Object.keys(mapaBalances).map(wallet => ({
-                            address: wallet,
-                            balance: mapaBalances[wallet]
-                        }));
+                        if(holders.value.length === 0) {
+                            mensajeEstado.value = "⚠️ No se encontraron piezas listadas en el indexador público.";
+                        }
 
                     } catch (error) {
-                        console.error("Error capturando datos dinámicos:", error);
+                        console.error(error);
+                        mensajeEstado.value = "❌ Error de conexión de red con Ronin.";
                     } finally {
                         cargando.value = false;
                     }
@@ -217,7 +167,7 @@
 
                 const calcularPuntosActuales = (holder) => {
                     const ahora = new Date();
-                    const hoyUTC = Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), grandma = ahora.getUTDCDate ? ahora.getUTCDate() : ahora.getUTCDate());
+                    const hoyUTC = Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), ahora.getUTCDate());
                     const dias = Math.floor((hoyUTC - (fechaInicioConteo * 1000)) / (1000 * 60 * 60 * 24));
                     return dias > 0 ? (dias * holder.balance) : 0;
                 };
@@ -233,7 +183,6 @@
                     const mananaUTC = new Date(Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), ahora.getUTCDate() + 1, 0, 0, 0));
                     let totalSegundos = Math.floor((mananaUTC - ahora) / 1000);
                     if (totalSegundos < 0) totalSegundos = 0;
-                    
                     tiempo.value = {
                         horas: String(Math.floor(totalSegundos / 3600)).padStart(2, '0'),
                         minutos: String(Math.floor((totalSegundos % 3600) / 60)).padStart(2, '0'),
@@ -242,22 +191,12 @@
                 };
 
                 onMounted(async () => {
-                    await consultarMarketplaceAPI();
+                    await consultarAPIAutomatico();
                     actualizarCuentaRegresiva();
                     setInterval(actualizarCuentaRegresiva, 1000);
-
-                    // Sincronización automática de mercado cada 5 minutos
-                    setInterval(async () => {
-                        await consultarMarketplaceAPI();
-                    }, 300000);
                 });
 
-                return { 
-                    cargando,
-                    holdersOrdenados, 
-                    tiempo, 
-                    formatearDireccion: (a) => a ? a.substring(0, 6) + '...' + a.substring(a.length - 4) : '' 
-                };
+                return { cargando, holdersOrdenados, tiempo, mensajeEstado, formatearDireccion: (a) => a ? a.substring(0, 6) + '...' + a.substring(a.length - 4) : '' };
             }
         }).mount('#app');
     </script>
