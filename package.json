@@ -1,0 +1,10 @@
+{
+  "name": "ograts-indexer",
+  "version": "1.0.0",
+  "description": "Indexador de holders para Supabase",
+  "main": "indexar.js",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "node-fetch": "^3.3.2"
+  }
+}
