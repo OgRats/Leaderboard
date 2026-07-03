@@ -7,7 +7,6 @@ async function actualizarLeaderboard() {
     try {
         const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
 
-        // 1. Obtener los tokens desde Ronin
         console.log("⏳ Conectando con el Marketplace de Ronin...");
         const urlAPI = `https://api-gateway.skymavis.com/skynet/ronin/web3/v2/collections/${contratoOgRats}/tokens?limit=200`;
         const responseRonin = await fetch(urlAPI, {
@@ -18,8 +17,14 @@ async function actualizarLeaderboard() {
             }
         });
 
-        if (!responseRonin.ok) throw new Error(`Error en la API de Ronin: ${responseRonin.status}`);
         const json = await responseRonin.json();
+        
+        // ESTO NOS MOSTRARÁ EN LA CAPTURA EL MENSAJE EXACTO DE ERROR DE RONIN
+        console.log("🔍 RESPUESTA CRUDA DE RONIN:", JSON.stringify(json));
+
+        if (!responseRonin.ok) {
+            throw new Error(`Ronin respondió con estado ${responseRonin.status}`);
+        }
         
         let tokens = [];
         if (json && Array.isArray(json.result)) {
@@ -49,10 +54,8 @@ async function actualizarLeaderboard() {
             updated_at: new Date().toISOString()
         }));
 
-        // 2. Enviar los datos a Supabase mediante HTTP directo (Sin librerías conflictivas)
         console.log(`⏳ Limpiando datos viejos y subiendo ${filasAInsertar.length} holders a Supabase vía API Rest...`);
         
-        // Borrar registros existentes
         await fetch(`${SUPABASE_URL}/rest/v1/ograts_holders?address=not.eq.0x0`, {
             method: "DELETE",
             headers: {
@@ -61,7 +64,6 @@ async function actualizarLeaderboard() {
             }
         });
 
-        // Insertar nuevos registros
         const resInsert = await fetch(`${SUPABASE_URL}/rest/v1/ograts_holders`, {
             method: "POST",
             headers: {
@@ -74,10 +76,10 @@ async function actualizarLeaderboard() {
         });
 
         if (!resInsert.ok) {
-            throw new Error(`Error insertando en Supabase: ${resInsert.status} ${await resInsert.text()}`);
+            throw new Error(`Error insertando en Supabase: ${resInsert.status}`);
         }
 
-        console.log("✅ ¡Supabase se ha actualizado correctamente mediante HTTP directo!");
+        console.log("✅ ¡Supabase se ha actualizado correctamente!");
 
     } catch (error) {
         console.error("❌ Ocurrió un error en la sincronización:", error.message);
