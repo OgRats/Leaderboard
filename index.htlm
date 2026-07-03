@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OgRats Official Leaderboard</title>
+    <script src="https://unpkg.com/vue@3.4.0/dist/vue.global.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=400;600;700;800&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #030712; color: #f3f4f6; min-height: 100vh; padding: 2rem 1rem; }
+        .container { max-width: 1024px; margin: 0 auto; }
+        .text-center { text-align: center; }
+        .mb-8 { margin-bottom: 2rem; }
+        h1 { font-size: 2.25rem; font-weight: 800; background: linear-gradient(to right, #3b82f6, #10b981); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .subtitle { font-size: 0.75rem; color: #9ca3af; margin-top: 0.5rem; }
+        .counter-card { background-color: #111827; border: 1px solid #1f2937; border-radius: 1rem; padding: 1.5rem; max-width: 400px; margin: 0 auto 2rem auto; }
+        .counter-title { font-size: 0.75rem; text-transform: uppercase; color: #9ca3af; font-weight: 600; margin-bottom: 0.5rem; }
+        .grid-3 { display: grid; grid-template-cols: repeat(3, 1fr); gap: 0.5rem; }
+        .time-box { background-color: #030712; padding: 0.75rem; border-radius: 0.75rem; border: 1px solid #1f2937; font-family: monospace; font-size: 1.875rem; font-weight: 700; color: #34d399; }
+        .time-label { display: block; font-size: 10px; color: #6b7280; text-transform: uppercase; margin-top: 0.25rem; }
+        .table-container { background-color: #111827; border: 1px solid #1f2937; border-radius: 1rem; overflow: hidden; }
+        .table-header-bar { padding: 1rem; background-color: #1f2937; display: flex; justify-content: space-between; align-items: center; }
+        .table-title { font-size: 0.875rem; font-weight: 700; color: #d1d5db; }
+        .overflow-x { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { padding: 1rem; background-color: #111827; border-bottom: 1px solid #1f2937; color: #9ca3af; font-size: 0.75rem; text-transform: uppercase; }
+        td { padding: 1rem; border-bottom: 1px solid rgba(31, 41, 55, 0.4); font-size: 0.875rem; }
+        tr:hover { background-color: rgba(31, 41, 55, 0.3); }
+        .text-center-cell { text-align: center; }
+        .text-right-cell { text-align: right; }
+        .font-mono { font-family: monospace; }
+        .wallet-link { color: #60a5fa; text-decoration: none; }
+        .wallet-link:hover { text-decoration: underline; }
+        .points { color: #34d399; font-weight: 700; }
+        .status-msg { text-align: center; padding: 3rem 0; color: #9ca3af; }
+    </style>
+</head>
+<body>
+
+    <div id="app" class="container">
+        <div class="text-center mb-8">
+            <h1>🐀 OgRats Live Leaderboard 🐀</h1>
+            <p class="subtitle">Sincronizado automáticamente con los datos del contrato</p>
+        </div>
+
+        <div class="counter-card text-center">
+            <p class="counter-title">Próxima actualización de puntos (12:00 AM UTC)</p>
+            <div class="grid-3">
+                <div class="time-box"><div>{{ tiempo.horas }}</div><span class="time-label">Horas</span></div>
+                <div class="time-box"><div>{{ tiempo.minutos }}</div><span class="time-label">Minutos</span></div>
+                <div class="time-box"><div>{{ tiempo.segundos }}</div><span class="time-label">Segundos</span></div>
+            </div>
+        </div>
+
+        <div v-if="!cargando && holdersOrdenados.length > 0" class="table-container">
+            <div class="table-header-bar">
+                <span class="table-title">Top Holders Activos</span>
+            </div>
+            <div class="overflow-x">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="text-center-cell" style="width: 70px;">Pos</th>
+                            <th>Dirección Wallet</th>
+                            <th class="text-center-cell">NFTs</th>
+                            <th class="text-right-cell">Puntos Acumulados</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(holder, index) in holdersOrdenados" :key="holder.address">
+                            <td class="text-center-cell" style="font-weight: bold;">
+                                <span v-if="index === 0">🥇</span>
+                                <span v-else-if="index === 1">🥈</span>
+                                <span v-else-if="index === 2">🥉</span>
+                                <span v-else style="color: #6b7280;">{{ index + 1 }}</span>
+                            </td>
+                            <td class="font-mono">
+                                <a :href="'https://app.roninchain.com/address/' + holder.address" target="_blank" class="wallet-link">
+                                    {{ formatearDireccion(holder.address) }}
+                                </a>
+                            </td>
+                            <td class="text-center-cell" style="font-weight: bold;">{{ holder.balance }}</td>
+                            <td class="text-right-cell font-mono points">{{ holder.puntosCalculados }} pts</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div v-else class="status-msg">
+            {{ mensajeEstado }}
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const cargando = ref(true);
+                const holders = ref([]);
+                const mensajeEstado = ref("⏳ Leyendo base de datos de holders...");
+                const tiempo = ref({ horas: "00", minutos: "00", segundos: "00" });
+                
+                const fechaInicioConteo = Math.floor(new Date("2026-06-25T00:00:00Z").getTime() / 1000);
+
+                const cargarBaseDeDatos = async () => {
+                    try {
+                        // Lee el archivo JSON dinámico en tu mismo repositorio
+                        const response = await fetch("holders.json");
+                        if (!response.ok) throw new Error();
+                        holders.value = await response.json();
+                    } catch (error) {
+                        mensajeEstado.value = "⚠️ Archivo 'holders.json' no encontrado o vacío. Esperando indexación...";
+                    } finally {
+                        cargando.value = false;
+                    }
+                };
+
+                const calcularPuntosActuales = (holder) => {
+                    const ahora = new Date();
+                    const hoyUTC = Date.UTC(ahora.getUTCFullYear(), grandma = ahora.getUTCMonth(), ahora.getUTCDate());
+                    const dias = Math.floor((hoyUTC - (fechaInicioConteo * 1000)) / (1000 * 60 * 60 * 24));
+                    return dias > 0 ? (dias * holder.balance) : 0;
+                };
+
+                const holdersOrdenados = computed(() => {
+                    return [...holders.value]
+                        .map(h => ({ ...h, puntosCalculados: calcularPuntosActuales(h) }))
+                        .sort((a, b) => b.balance - a.balance);
+                });
+
+                const actualizarCuentaRegresiva = () => {
+                    const ahora = new Date();
+                    const mananaUTC = new Date(Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), ahora.getUTCDate() + 1, 0, 0, 0));
+                    let totalSegundos = Math.floor((mananaUTC - ahora) / 1000);
+                    if (totalSegundos < 0) totalSegundos = 0;
+                    tiempo.value = {
+                        horas: String(Math.floor(totalSegundos / 3600)).padStart(2, '0'),
+                        minutos: String(Math.floor((totalSegundos % 3600) / 60)).padStart(2, '0'),
+                        segundos: String(totalSegundos % 60).padStart(2, '0')
+                    };
+                };
+
+                onMounted(async () => {
+                    await cargarBaseDeDatos();
+                    actualizarCuentaRegresiva();
+                    setInterval(actualizarCuentaRegresiva, 1000);
+                });
+
+                return { cargando, holdersOrdenados, tiempo, mensajeEstado, formatearDireccion: (a) => a ? a.substring(0, 6) + '...' + a.substring(a.length - 4) : '' };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
+
