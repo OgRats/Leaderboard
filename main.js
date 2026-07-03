@@ -4,21 +4,20 @@ createApp({
     setup() {
         const cargando = ref(true);
         const holders = ref([]);
-        const tiempo = ref({ horas: "00", minutos: "00", segundos: "00" });
+        const tiempo = ref({ horas: "00", minutes: "00", segundos: "00" });
         
-        // Fecha de inicio para el cálculo acumulativo de tus puntos (Año 2026)
         const fechaInicioConteo = Math.floor(new Date("2026-06-25T00:00:00Z").getTime() / 1000);
 
-        // CONFIGURACIÓN OFICIAL DE SINCRONIZACIÓN CON EL MARKETPLACE
+        // CONFIGURACIÓN CON TU NUEVA API KEY
         const contratoOgRats = "0x953e34637cc596b8195eb7fb83305402d3b9d000";
-        const API_KEY_RONIN = "rtkyjrbeFFfQy0m1htxdoKWE2iWOFolJ"; 
+        const API_KEY_RONIN = "gQUj546pZtgFbOz8DD1iT4AirKIkJnJJ"; 
 
         const consultarMarketplaceAPI = async () => {
             try {
-                console.log("Conectando con el indexador oficial de Sky Mavis...");
+                console.log("Sincronizando con la nueva API Key...");
                 
-                // Llamada directa al endpoint V2 que extrae los verdaderos holders del Marketplace
-                const response = await fetch(`https://api-gateway.skymavis.com/skynet/ronin/web3/v2/collections/${contratoOgRats}/owners?limit=100`, {
+                // Intentamos consultar el endpoint con un límite extendido de elementos
+                const response = await fetch(`https://api-gateway.skymavis.com/skynet/ronin/web3/v2/collections/${contratoOgRats}/owners?limit=200`, {
                     method: "GET",
                     headers: {
                         "Accept": "application/json",
@@ -26,28 +25,45 @@ createApp({
                     }
                 });
 
-                if (!response.ok) throw new Error("Llave o conexión rechazada por Sky Mavis");
+                if (!response.ok) throw new Error(`Error de respuesta: ${response.status}`);
 
                 const json = await response.json();
                 
-                // Mapeo preciso de la estructura devuelta por la Blockchain de Ronin
-                const listaData = json.result || [];
+                // Estructura de extracción profunda
+                let datosCrudos = [];
+                if (json.result && Array.isArray(json.result)) {
+                    datosCrudos = json.result;
+                } else if (json.result && Array.isArray(json.result.items)) {
+                    datosCrudos = json.result.items;
+                } else if (json.owners && Array.isArray(json.owners)) {
+                    datosCrudos = json.owners;
+                } else if (json.items && Array.isArray(json.items)) {
+                    datosCrudos = json.items;
+                }
 
-                holders.value = listaData.map(item => ({
-                    address: item.owner ? item.owner.toLowerCase() : "",
-                    balance: parseInt(item.balance || item.amount || 0)
-                })).filter(h => h.balance > 0 && h.address !== "");
+                // Si la API nos devuelve una estructura limpia, mapeamos los balances
+                if (datosCrudos.length > 0) {
+                    holders.value = datosCrudos.map(item => {
+                        const wallet = item.owner || item.address || item.ownerAddress || "";
+                        const cantidad = item.balance || item.amount || item.tokenCount || 1;
+                        return {
+                            address: wallet ? wallet.toLowerCase() : "",
+                            balance: parseInt(cantidad)
+                        };
+                    }).filter(h => h.balance > 0 && h.address !== "" && h.address !== "0x0000000000000000000000000000000000000000");
+                } else {
+                    console.log("La API devolvió un array vacío. Posiblemente requiera indexación manual de tokens.");
+                }
 
-                console.log(`¡Sincronización exitosa! Encontrados ${holders.value.length} holders en el marketplace.`);
+                console.log(`Carga finalizada. Registros procesados: ${holders.value.length}`);
 
             } catch (error) {
-                console.error("Error sincronizando los holders del mercado:", error);
+                console.error("Fallo en la comunicación con Sky Mavis:", error);
             } finally {
                 cargando.value = false;
             }
         };
 
-        // Fórmula matemática para la puntuación automática diaria de los NFTs de tus holders
         const calcularPuntosActuales = (holder) => {
             const ahora = new Date();
             const hoyUTC = Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), ahora.getUTCDate());
@@ -55,17 +71,15 @@ createApp({
             return dias > 0 ? (dias * holder.balance) : 0;
         };
 
-        // Organiza el Top de mayor a menor según el Marketplace
         const holdersOrdenados = computed(() => {
             return [...holders.value]
                 .map(h => ({ ...h, puntosCalculados: calcularPuntosActuales(h) }))
                 .sort((a, b) => b.balance - a.balance);
         });
 
-        // Lógica visual del temporizador UTC diario en pantalla
         const actualizarCuentaRegresiva = () => {
             const ahora = new Date();
-            const mananaUTC = new Date(Date.UTC(ahora.getUTCFullYear(), grandma = ahora.getUTCMonth(), ahora.getUTCDate() + 1, 0, 0, 0));
+            const mananaUTC = new Date(Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), ahora.getUTCDate() + 1, 0, 0, 0));
             let totalSegundos = Math.floor((mananaUTC - ahora) / 1000);
             if (totalSegundos < 0) totalSegundos = 0;
             
@@ -77,14 +91,10 @@ createApp({
         };
 
         onMounted(async () => {
-            // Primer escaneo al cargar la web
             await consultarMarketplaceAPI();
             actualizarCuentaRegresiva();
-            
-            // Intervalo del reloj visual (Cada 1 segundo)
             setInterval(actualizarCuentaRegresiva, 1000);
 
-            // Refresco de datos automático en segundo plano mientras la pestaña esté abierta (Cada 5 minutos)
             setInterval(async () => {
                 await consultarMarketplaceAPI();
             }, 300000);
@@ -98,3 +108,4 @@ createApp({
         };
     }
 }).mount('#app');
+                
