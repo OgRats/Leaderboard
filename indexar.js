@@ -25,7 +25,7 @@ async function actualizarLeaderboard() {
         
         const json = await response.json();
         
-        // Ajuste aquí: Extraemos la lista de tokens sin importar cómo venga estructurada
+        // Extraemos la lista sin importar la estructura exacta que devuelva
         let tokens = [];
         if (json && Array.isArray(json.result)) {
             tokens = json.result;
@@ -39,7 +39,7 @@ async function actualizarLeaderboard() {
 
         if (!Array.isArray(tokens) || tokens.length === 0) {
             console.log("⚠️ Respuesta de la API recibida:", JSON.stringify(json));
-            throw new Error("No se pudo obtener una lista válida de tokens. Revisa el formato o tu API Key.");
+            throw new Error("No se pudo obtener una lista válida de tokens.");
         }
 
         const mapaBalances = {};
