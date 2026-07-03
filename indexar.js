@@ -5,7 +5,11 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const API_KEY_RONIN = process.env.RONIN_API_KEY;
 const contratoOgRats = "0x953e34637cc596b8195eb7fb83305402d3b9d000";
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+// CONFIGURACIÓN ESPECIAL: Desactivamos Realtime para evitar el error de WebSockets por completo
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false },
+  realtime: { accessToken: () => null } 
+});
 
 async function actualizarLeaderboard() {
     try {
@@ -25,7 +29,6 @@ async function actualizarLeaderboard() {
         
         const json = await response.json();
         
-        // Extraemos la lista sin importar la estructura exacta que devuelva
         let tokens = [];
         if (json && Array.isArray(json.result)) {
             tokens = json.result;
@@ -33,12 +36,10 @@ async function actualizarLeaderboard() {
             tokens = json.result.items;
         } else if (json && Array.isArray(json.items)) {
             tokens = json.items;
-        } else if (Array.isArray(json)) {
-            tokens = json;
         }
 
         if (!Array.isArray(tokens) || tokens.length === 0) {
-            console.log("⚠️ Respuesta de la API recibida:", JSON.stringify(json));
+            console.log("🔍 Respuesta cruda:", JSON.stringify(json));
             throw new Error("No se pudo obtener una lista válida de tokens.");
         }
 
@@ -66,10 +67,9 @@ async function actualizarLeaderboard() {
         console.log("✅ ¡Supabase se ha actualizado correctamente!");
 
     } catch (error) {
-        console.error("❌ Ocurrió un error en la sincronización:", error);
+        console.error("❌ Ocurrió un error en la sincronización:", error.message);
         process.exit(1);
     }
 }
 
 actualizarLeaderboard();
-        
