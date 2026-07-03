@@ -21,10 +21,10 @@ jobs:
     - name: Instalar dependencias
       run: npm install
 
-    - name: Ejecutar Indexador de Ronin a Supabase
+    - name: Ejecutar Indexador de OpenSea a Supabase
       env:
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        RONIN_API_KEY: ${{ secrets.RONIN_API_KEY }}
+        OPENSEA_API_KEY: ${{ secrets.OPENSEA_API_KEY }}
       run: node indexar.js
       
