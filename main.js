@@ -6,28 +6,78 @@ createApp({
         const holders = ref([]);
         const tiempo = ref({ horas: "00", minutos: "00", segundos: "00" });
         
-        // Fecha de inicio del conteo para el cálculo de puntos
+        // Fecha de inicio del conteo (Año 2026)
         const fechaInicioConteo = Math.floor(new Date("2026-06-25T00:00:00Z").getTime() / 1000);
 
-        // Función principal para obtener los datos más recientes del mercado
-        const cargarDatos = async () => {
+        // CONFIGURACIÓN BLOCKCHAIN DIRECTA
+        const contratoOgRats = "0x953e34637cc596b8195eb7fb83305402d3b9d000";
+        const urlRonin = "https://api.roninchain.com/rpc";
+
+        const consultarBlockchainDirecto = async () => {
             try {
-                // Se realiza la petición al archivo generado por tu bot/API
-                const response = await fetch('holders.json');
-                if (!response.ok) throw new Error("No se pudo obtener el archivo de datos");
+                console.log("Consultando mercado de Ronin en tiempo real...");
                 
-                const data = await response.json();
-                if (Array.isArray(data)) {
-                    holders.value = data;
-                }
-            } catch (e) {
-                console.error("Error actualizando los datos del Leaderboard:", e);
+                // 1. Obtener el bloque actual
+                const resBlock = await fetch(urlRonin, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ jsonrpc: "2.0", method: "eth_blockNumber", params: [], id: 1 })
+                });
+                const dataBlock = await resBlock.json();
+                const ultimoBloqueNum = parseInt(dataBlock.result, 16);
+
+                // 2. Definir rango seguro de bloques (Últimas horas/días de historial)
+                const bloqueInicioNum = ultimoBloqueNum - 300000;
+                const bloqueInicioHex = "0x" + bloqueInicioNum.toString(16);
+
+                // 3. Pedir los logs de transferencia directamente
+                const response = await fetch(urlRonin, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        jsonrpc: "2.0",
+                        method: "eth_getLogs",
+                        params: [{
+                            address: contratoOgRats,
+                            fromBlock: bloqueInicioHex,
+                            toBlock: dataBlock.result
+                        }],
+                        id: 2
+                    })
+                });
+
+                const json = await response.json();
+                const logs = json.result || [];
+                const mapaBalances = {};
+
+                // 4. Procesar transferencias en el navegador
+                logs.forEach(log => {
+                    if (log.topics && log.topics.length >= 4) {
+                        const desde = "0x" + log.topics[1].substring(26).toLowerCase();
+                        const hacia = "0x" + log.topics[2].substring(26).toLowerCase();
+
+                        if (desde !== "0x0000000000000000000000000000000000000000") {
+                            mapaBalances[desde] = (mapaBalances[desde] || 0) - 1;
+                        }
+                        mapaBalances[hacia] = (mapaBalances[hacia] || 0) + 1;
+                    }
+                });
+
+                // 5. Convertir a lista filtrada
+                holders.value = Object.keys(mapaBalances)
+                    .map(addr => ({
+                        address: addr,
+                        balance: mapaBalances[addr]
+                    }))
+                    .filter(h => h.balance > 0 && h.address !== "0x0000000000000000000000000000000000000000");
+
+            } catch (error) {
+                console.error("Error obteniendo datos directos de Ronin:", error);
             } finally {
                 cargando.value = false;
             }
         };
 
-        // Función matemática para procesar y asignar puntos
         const calcularPuntosActuales = (holder) => {
             const ahora = new Date();
             const hoyUTC = Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), ahora.getUTCDate());
@@ -35,14 +85,13 @@ createApp({
             return dias > 0 ? (dias * holder.balance) : 0;
         };
 
-        // Ordena automáticamente el Top según el balance de la wallet
         const holdersOrdenados = computed(() => {
             return [...holders.value]
                 .map(h => ({ ...h, puntosCalculados: calcularPuntosActuales(h) }))
-                .sort((a, b) => b.balance - a.balance);
+                .sort((a, b) => b.balance - a.balance)
+                .slice(0, 100);
         });
 
-        // Manejo visual de la cuenta regresiva en la interfaz
         const actualizarCuentaRegresiva = () => {
             const ahora = new Date();
             const mananaUTC = new Date(Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), ahora.getUTCDate() + 1, 0, 0, 0));
@@ -57,19 +106,14 @@ createApp({
         };
 
         onMounted(async () => {
-            // Ejecución inicial al cargar la página
-            await cargarDatos();
+            await consultarBlockchainDirecto();
             actualizarCuentaRegresiva();
-            
-            // Intervalo para el contador visual (Cada 1 segundo)
             setInterval(actualizarCuentaRegresiva, 1000);
 
-            // AUTO-ACTUALIZACIÓN EN SEGUNDO PLANO
-            // Configurado a 30 minutos (1800000 ms) para equilibrar frescura de datos y rendimiento
+            // Auto-actualizar el mercado cada 5 minutos mientras el usuario tenga la web abierta
             setInterval(async () => {
-                console.log("Sincronizando tabla con los últimos datos del mercado...");
-                await cargarDatos();
-            }, 1800000); 
+                await consultarBlockchainDirecto();
+            }, 300000);
         });
 
         return { 
@@ -80,4 +124,3 @@ createApp({
         };
     }
 }).mount('#app');
-              
