@@ -15,13 +15,33 @@ async function actualizarLeaderboard() {
         const urlAPI = `https://api-gateway.skymavis.com/skynet/ronin/web3/v2/collections/${contratoOgRats}/tokens?limit=200`;
         const response = await fetch(urlAPI, {
             method: "GET",
-            headers: { "Accept": "application/json", "X-API-KEY": API_KEY_RONIN }
+            headers: { 
+                "Accept": "application/json", 
+                "X-API-KEY": API_KEY_RONIN 
+            }
         });
 
         if (!response.ok) throw new Error(`Error en la API de Ronin: ${response.status}`);
         
         const json = await response.json();
-        const tokens = json.result || json.items || [];
+        
+        // Ajuste aquí: Extraemos la lista de tokens sin importar cómo venga estructurada
+        let tokens = [];
+        if (json && Array.isArray(json.result)) {
+            tokens = json.result;
+        } else if (json && json.result && Array.isArray(json.result.items)) {
+            tokens = json.result.items;
+        } else if (json && Array.isArray(json.items)) {
+            tokens = json.items;
+        } else if (Array.isArray(json)) {
+            tokens = json;
+        }
+
+        if (!Array.isArray(tokens) || tokens.length === 0) {
+            console.log("⚠️ Respuesta de la API recibida:", JSON.stringify(json));
+            throw new Error("No se pudo obtener una lista válida de tokens. Revisa el formato o tu API Key.");
+        }
+
         const mapaBalances = {};
 
         tokens.forEach(token => {
@@ -38,11 +58,6 @@ async function actualizarLeaderboard() {
             updated_at: new Date().toISOString()
         }));
 
-        if (filasAInsertar.length === 0) {
-            console.log("⚠️ No se encontraron tokens en la respuesta.");
-            return;
-        }
-
         console.log(`⏳ Limpiando datos viejos y subiendo ${filasAInsertar.length} holders a Supabase...`);
         await supabase.from('ograts_holders').delete().neq('address', '0x0');
         const { error } = await supabase.from('ograts_holders').insert(filasAInsertar);
@@ -57,4 +72,4 @@ async function actualizarLeaderboard() {
 }
 
 actualizarLeaderboard();
-  
+        
