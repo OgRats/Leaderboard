@@ -6,31 +6,25 @@ createApp({
         const holders = ref([]);
         const tiempo = ref({ horas: "00", minutos: "00", segundos: "00" });
         
-        // Fecha de inicio del conteo (Año 2026)
         const fechaInicioConteo = Math.floor(new Date("2026-06-25T00:00:00Z").getTime() / 1000);
 
-        // CONFIGURACIÓN BLOCKCHAIN DIRECTA
         const contratoOgRats = "0x953e34637cc596b8195eb7fb83305402d3b9d000";
         const urlRonin = "https://api.roninchain.com/rpc";
 
         const consultarBlockchainDirecto = async () => {
             try {
-                console.log("Consultando mercado de Ronin en tiempo real...");
+                console.log("Escaneando el historial completo desde el bloque génesis...");
                 
-                // 1. Obtener el bloque actual
+                // 1. Obtener el número de bloque más reciente en la red
                 const resBlock = await fetch(urlRonin, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ jsonrpc: "2.0", method: "eth_blockNumber", params: [], id: 1 })
                 });
                 const dataBlock = await resBlock.json();
-                const ultimoBloqueNum = parseInt(dataBlock.result, 16);
+                const ultimoBloqueHex = dataBlock.result;
 
-                // 2. Definir rango seguro de bloques (Últimas horas/días de historial)
-                const bloqueInicioNum = ultimoBloqueNum - 300000;
-                const bloqueInicioHex = "0x" + bloqueInicioNum.toString(16);
-
-                // 3. Pedir los logs de transferencia directamente
+                // 2. Buscamos desde el bloque '0x0' (el inicio de la red) para capturar TODO el historial
                 const response = await fetch(urlRonin, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -39,8 +33,8 @@ createApp({
                         method: "eth_getLogs",
                         params: [{
                             address: contratoOgRats,
-                            fromBlock: bloqueInicioHex,
-                            toBlock: dataBlock.result
+                            fromBlock: "0x0", 
+                            toBlock: ultimoBloqueHex
                         }],
                         id: 2
                     })
@@ -50,7 +44,9 @@ createApp({
                 const logs = json.result || [];
                 const mapaBalances = {};
 
-                // 4. Procesar transferencias en el navegador
+                console.log(`Eventos encontrados en total: ${logs.length}`);
+
+                // 3. Procesar las transferencias históricas
                 logs.forEach(log => {
                     if (log.topics && log.topics.length >= 4) {
                         const desde = "0x" + log.topics[1].substring(26).toLowerCase();
@@ -63,7 +59,7 @@ createApp({
                     }
                 });
 
-                // 5. Convertir a lista filtrada
+                // 4. Mapear a la lista reactiva de Vue
                 holders.value = Object.keys(mapaBalances)
                     .map(addr => ({
                         address: addr,
@@ -72,7 +68,7 @@ createApp({
                     .filter(h => h.balance > 0 && h.address !== "0x0000000000000000000000000000000000000000");
 
             } catch (error) {
-                console.error("Error obteniendo datos directos de Ronin:", error);
+                console.error("Error conectando con el nodo de Ronin:", error);
             } finally {
                 cargando.value = false;
             }
@@ -99,7 +95,7 @@ createApp({
             if (totalSegundos < 0) totalSegundos = 0;
             
             tiempo.value = {
-                horas: String(Math.floor(totalSegundos / 3600)).padStart(2, '0'),
+                hours: String(Math.floor(totalSegundos / 3600)).padStart(2, '0'),
                 minutos: String(Math.floor((totalSegundos % 3600) / 60)).padStart(2, '0'),
                 segundos: String(totalSegundos % 60).padStart(2, '0')
             };
@@ -110,7 +106,7 @@ createApp({
             actualizarCuentaRegresiva();
             setInterval(actualizarCuentaRegresiva, 1000);
 
-            // Auto-actualizar el mercado cada 5 minutos mientras el usuario tenga la web abierta
+            // Sincronización automática de mercado cada 5 minutos
             setInterval(async () => {
                 await consultarBlockchainDirecto();
             }, 300000);
