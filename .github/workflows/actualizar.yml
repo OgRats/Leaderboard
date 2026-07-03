@@ -10,12 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Descargar repositorio
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4  # Actualizado de v3 a v4
 
       - name: Instalar Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4  # Actualizado de v3 a v4
         with:
-          node-version: 18
+          node-version: 20  # Forzamos el uso de Node 20 directamente
 
       - name: Ejecutar Extractor Blockchain
         run: node extractor.js
@@ -26,4 +26,3 @@ jobs:
           git config --global user.email 'bot@github.com'
           git add holders.json
           git diff --quiet && git diff --staged --quiet || (git commit -m "Actualización automática Top 100 Real" && git push)
-          
