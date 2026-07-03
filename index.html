@@ -42,7 +42,7 @@
     <div id="app" class="container">
         <div class="text-center mb-8">
             <h1>🐀 OgRats Live Leaderboard 🐀</h1>
-            <p class="subtitle">Sincronizado automáticamente mediante el Indexador de Ronin</p>
+            <p class="subtitle">Sincronizado directamente con la Blockchain de Ronin</p>
         </div>
 
         <div class="counter-card text-center">
@@ -56,7 +56,7 @@
 
         <div v-if="!cargando && holdersOrdenados.length > 0" class="table-container">
             <div class="table-header-bar">
-                <span class="table-title">Top Holders Reales en Vivo</span>
+                <span class="table-title">Top Holders Activos</span>
                 <span class="table-badge">1 OgRat = 1 Punto / Día</span>
             </div>
             <div class="overflow-x">
@@ -102,72 +102,76 @@
             setup() {
                 const cargando = ref(true);
                 const holders = ref([]);
-                const mensajeEstado = ref("⏳ Conectando con el mercado de Ronin...");
+                const mensajeEstado = ref("⏳ Conectando directamente con el nodo RPC de Ronin...");
                 const tiempo = ref({ horas: "00", minutos: "00", segundos: "00" });
                 
                 const fechaInicioConteo = Math.floor(new Date("2026-06-25T00:00:00Z").getTime() / 1000);
                 const contratoOgRats = "0x953e34637cc596b8195eb7fb83305402d3b9d000";
                 
-                // TU API KEY ASIGNADA DE FORMA CORRECTA
-                const API_KEY_RONIN = "gQUj546pZtgFbOz8DD1iT4AirKIkJnJJ"; 
+                // Nodo RPC alternativo público que no exige API Key ni bloquea por CORS
+                const urlRPC = "https://api.roninchain.com/rpc";
 
-                const consultarAPIAutomatico = async () => {
+                const consultarBlockchainRPC = async () => {
                     try {
-                        const query = `
-                        {
-                            erc721Tokens(where: {contract: "${contratoOgRats}"}, limit: 100) {
-                                owners {
-                                    owner
-                                    balance
-                                }
-                            }
-                        }`;
-
-                        // Pasamos el API Key de forma segura en las cabeceras requeridas por Sky Mavis
-                        const response = await fetch("https://skynet-api.roninchain.com/graphql", {
+                        // 1. Consultar bloque actual
+                        const resBlock = await fetch(urlRPC, {
                             method: "POST",
-                            headers: { 
-                                "Content-Type": "application/json",
-                                "Accept": "application/json",
-                                "X-API-KEY": API_KEY_RONIN
-                            },
-                            body: JSON.stringify({ query })
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ jsonrpc: "2.0", method: "eth_blockNumber", params: [], id: 1 })
+                        });
+                        const dataBlock = await resBlock.json();
+                        const ultimoBloqueHex = dataBlock.result;
+                        const ultimoBloqueNum = parseInt(ultimoBloqueHex, 16);
+
+                        // Evaluamos las transferencias ocurridas en los últimos bloques para armar el balance dinámico
+                        const bloqueInicioHex = "0x" + (ultimoBloqueNum - 400000).toString(16);
+
+                        // 2. Pedir logs de Transferencia (Topic estándar ERC-721: Transfer)
+                        const response = await fetch(urlRPC, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                jsonrpc: "2.0",
+                                method: "eth_getLogs",
+                                params: [{
+                                    address: contratoOgRats,
+                                    fromBlock: bloqueInicioHex,
+                                    toBlock: ultimoBloqueHex,
+                                    topics: ["0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"]
+                                }],
+                                id: 2
+                            })
                         });
 
                         const json = await response.json();
-                        const dataOwners = json.data?.erc721Tokens?.owners || [];
+                        const logs = json.result || [];
+                        const mapaBalances = {};
 
-                        if(dataOwners.length === 0) {
-                            const queryAlt = `{ tokens(where: { contract: "${contratoOgRats}" }, limit: 100) { owner } }`;
-                            const resAlt = await fetch("https://skynet-api.roninchain.com/graphql", {
-                                method: "POST",
-                                headers: { 
-                                    "Content-Type": "application/json",
-                                    "Accept": "application/json",
-                                    "X-API-KEY": API_KEY_RONIN
-                                },
-                                body: JSON.stringify({ query: queryAlt })
-                            });
-                            const jsonAlt = await resAlt.json();
-                            const tokensRaw = jsonAlt.data?.tokens || [];
-                            
-                            const conteo = {};
-                            tokensRaw.forEach(t => { if(t.owner) conteo[t.owner.toLowerCase()] = (conteo[t.owner.toLowerCase()] || 0) + 1; });
-                            holders.value = Object.keys(conteo).map(w => ({ address: w, balance: conteo[w] }));
-                        } else {
-                            holders.value = dataOwners.map(o => ({
-                                address: o.owner.toLowerCase(),
-                                balance: parseInt(o.balance || 1)
-                            })).filter(h => h.address !== "0x0000000000000000000000000000000000000000");
-                        }
+                        // 3. Procesar las transferencias reales
+                        logs.forEach(log => {
+                            if (log.topics && log.topics.length >= 4) {
+                                const desde = "0x" + log.topics[1].substring(26).toLowerCase();
+                                const hacia = "0x" + log.topics[2].substring(26).toLowerCase();
+
+                                if (desde !== "0x0000000000000000000000000000000000000000") {
+                                    mapaBalances[desde] = (mapaBalances[desde] || 0) - 1;
+                                }
+                                mapaBalances[hacia] = (mapaBalances[hacia] || 0) + 1;
+                            }
+                        });
+
+                        holders.value = Object.keys(mapaBalances).map(wallet => ({
+                            address: wallet,
+                            balance: mapaBalances[wallet]
+                        })).filter(h => h.balance > 0 && h.address !== "0x0000000000000000000000000000000000000000");
 
                         if(holders.value.length === 0) {
-                            mensajeEstado.value = "⚠️ No se encontraron piezas listadas en el indexador público.";
+                            mensajeEstado.value = "⚠️ No se detectaron movimientos recientes en el rango de bloques actual.";
                         }
 
                     } catch (error) {
                         console.error(error);
-                        mensajeEstado.value = "❌ Error de conexión de red con Ronin.";
+                        mensajeEstado.value = "❌ Error leyendo datos directamente de la blockchain.";
                     } finally {
                         cargando.value = false;
                     }
@@ -199,7 +203,7 @@
                 };
 
                 onMounted(async () => {
-                    await consultarAPIAutomatico();
+                    await consultarBlockchainRPC();
                     actualizarCuentaRegresiva();
                     setInterval(actualizarCuentaRegresiva, 1000);
                 });
@@ -210,3 +214,4 @@
     </script>
 </body>
 </html>
+
