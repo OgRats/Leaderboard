@@ -17,12 +17,14 @@
             align-items: center;
         }
         h1 {
-            color: #22c55e; /* Verde brillante como tu check 💚 */
+            color: #22c55e; /* Verde brillante 💚 */
             margin-bottom: 5px;
+            text-align: center;
         }
         p {
             color: #94a3b8;
             margin-bottom: 25px;
+            text-align: center;
         }
         .leaderboard-container {
             width: 100%;
@@ -80,7 +82,7 @@
 <body>
 
     <h1>🏆 OgRats Holders Leaderboard</h1>
-    <p>Actualizado automáticamente cada día</p>
+    <p>1 Punto diario acumulado por cada OG Rat holdeada</p>
 
     <div class="leaderboard-container">
         <table>
@@ -88,7 +90,7 @@
                 <tr>
                     <th class="rank">Pos</th>
                     <th>Billetera (Address)</th>
-                    <th class="text-right">NFTs (Balance)</th>
+                    <th class="text-right">Puntos / Rats</th>
                 </tr>
             </thead>
             <tbody id="leaderboard-body">
@@ -100,7 +102,7 @@
     </div>
 
     <script>
-        // CONFIGURACIÓN DE TU SUPABASE - ¡DATOS CORRECTOS AGREGADOS!
+        // CONFIGURACIÓN OFICIAL DE TU PROYECTO
         const SUPABASE_URL = "https://bcclyutxzbbgvarypfwd.supabase.co";
         const SUPABASE_ANON_KEY = "EyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJjY2x5dXR4emJiZ3ZhcnlwZndkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwOTY1NDksImV4cCI6MjA5ODY3MjU0OX0.4DUTMdbttMB-Yk25qB5rUlLkV0DgKDWNcuuwjI2rK6E"; 
 
@@ -108,50 +110,55 @@
             const tablaBody = document.getElementById('leaderboard-body');
             
             try {
-                // Consulta directa ordenando por balance descendente
-                const url = `${SUPABASE_URL}/rest/v1/ograts_holders?select=address,balance&order=balance.desc`;
+                // Se añade un parámetro aleatorio al final (&v=...) para obligar al móvil a romper la caché vieja
+                const url = `${SUPABASE_URL}/rest/v1/ograts_holders?select=address,balance,puntos&order=puntos.desc&v=${Date.now()}`;
                 
                 const response = await fetch(url, {
                     method: 'GET',
                     headers: {
                         'apikey': SUPABASE_ANON_KEY,
-                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json'
                     }
                 });
 
-                if (!response.ok) throw new Error('Error al conectar con Supabase');
+                if (!response.ok) {
+                    const textoError = await response.text();
+                    throw new Error(`Código ${response.status}: ${textoError}`);
+                }
 
                 const data = await response.json();
                 tablaBody.innerHTML = ''; 
 
                 if (data.length === 0) {
-                    tablaBody.innerHTML = '<tr><td colspan="3" class="loading">No hay datos disponibles en este momento.</td></tr>';
+                    tablaBody.innerHTML = '<tr><td colspan="3" class="loading">No hay datos de holders guardados aún. Asegúrate de ejecutar el Action en GitHub.</td></tr>';
                     return;
                 }
 
-                // Generamos cada fila en la tabla
+                // Dibujar las filas con el nuevo sistema de puntos diarios
                 data.forEach((holder, index) => {
                     const fila = document.createElement('tr');
                     
-                    // Formato bonito de la wallet (Ej: 0x1234...abcd)
                     const walletCorta = holder.address.substring(0, 6) + '...' + holder.address.substring(holder.address.length - 4);
+                    const pts = holder.puntos || 0;
+                    const rats = holder.balance || 0;
 
                     fila.innerHTML = `
                         <td class="rank">#${index + 1}</td>
                         <td class="address" title="${holder.address}">${walletCorta}</td>
-                        <td class="balance">${holder.balance}</td>
+                        <td class="balance">${pts} Pts <span style="font-size:0.8rem; color:#94a3b8; font-weight:normal;">(${rats} Rats)</span></td>
                     `;
                     tablaBody.appendChild(fila);
                 });
 
             } catch (error) {
                 console.error(error);
-                tablaBody.innerHTML = '<tr><td colspan="3" class="loading" style="color: #ef4444;">❌ Error al cargar los datos.</td></tr>';
+                // Si algo falla internamente, el celular mostrará el motivo en letras rojas aquí mismo
+                tablaBody.innerHTML = `<tr><td colspan="3" class="loading" style="color: #ef4444; padding: 20px;">❌ Error: ${error.message}</td></tr>`;
             }
         }
 
         cargarLeaderboard();
     </script>
 </body>
-  </html>
-  
+</html>
