@@ -110,8 +110,8 @@
             const tablaBody = document.getElementById('leaderboard-body');
             
             try {
-                // Se añade un parámetro aleatorio al final (&v=...) para obligar al móvil a romper la caché vieja
-                const url = `${SUPABASE_URL}/rest/v1/ograts_holders?select=address,balance,puntos&order=puntos.desc&v=${Date.now()}`;
+                // Consulta limpia ordenada por puntos descendente
+                const url = `${SUPABASE_URL}/rest/v1/ograts_holders?select=address,balance,puntos&order=puntos.desc`;
                 
                 const response = await fetch(url, {
                     method: 'GET',
@@ -153,7 +153,7 @@
 
             } catch (error) {
                 console.error(error);
-                // Si algo falla internamente, el celular mostrará el motivo en letras rojas aquí mismo
+                // Muestra cualquier error de conexión directamente en la pantalla del celular
                 tablaBody.innerHTML = `<tr><td colspan="3" class="loading" style="color: #ef4444; padding: 20px;">❌ Error: ${error.message}</td></tr>`;
             }
         }
