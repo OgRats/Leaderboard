@@ -6,58 +6,39 @@ async function actualizarLeaderboard() {
     try {
         const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
 
-        console.log("⏳ Conectando directamente con el Nodo Blockchain de Ronin...");
-        const urlRPC = "https://api.roninchain.com/rpc";
+        console.log("⏳ Obteniendo holders reales desde el Indexador de Sky Mavis...");
         
-        let logs = [];
-        
-        try {
-            // Buscamos solo en los últimos 10,000 bloques para evitar que el nodo nos bloquee por exceso de datos
-            const dataRPC = {
-                jsonrpc: "2.0",
-                id: 1,
-                method: "eth_getLogs",
-                params: [{
-                    address: contratoOgRats,
-                    fromBlock: "latest", 
-                    topics: ["0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"]
-                }]
-            };
+        // Endpoint público oficial de Ronin que trae los balances reales del contrato sin restricciones
+        const urlRonin = `https://api.roninchain.com/tokens/v2/ronin/nft/${contratoOgRats}/owners?limit=100`;
 
-            const responseRPC = await fetch(urlRPC, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(dataRPC)
-            });
+        const response = await fetch(urlRonin, {
+            method: "GET",
+            headers: { "Accept": "application/json" }
+        });
 
-            if (responseRPC.ok) {
-                const jsonRPC = await responseRPC.json();
-                logs = jsonRPC.result || [];
-            }
-        } catch (e) {
-            console.log("⚠️ Nodo saturado temporalmente, usando respaldo local.");
+        if (!response.ok) {
+            throw new Error(`El indexador de Ronin no respondió (Código ${response.status}).`);
         }
 
-        // Si el nodo no devolvió nada o falló, creamos datos base reales para activar tu tabla
-        if (!logs || logs.length === 0) {
-            console.log("📊 Generando datos iniciales para el Leaderboard...");
-            logs = [
-                { topics: ["", "0x0000000000000000000000000000000000000000", "0x0000000000000000000000001111111111111111111111111111111111111111"] },
-                { topics: ["", "0x0000000000000000000000000000000000000000", "0x0000000000000000000000002222222222222222222222222222222222222222"] },
-                { topics: ["", "0x0000000000000000000000000000000000000000", "0x0000000000000000000000003333333333333333333333333333333333333333"] }
-            ];
-        }
+        const json = await response.json();
+        const ownersList = json.results || json.items || [];
 
-        // Mapeamos los dueños actuales
         let snapshotActual = {};
-        logs.forEach(log => {
-            if (log.topics && log.topics[2]) {
-                const walletDestino = "0x" + log.topics[2].slice(26).toLowerCase();
-                if (walletDestino !== "0x0000000000000000000000000000000000000000") {
-                    snapshotActual[walletDestino] = (snapshotActual[walletDestino] || 0) + 1;
-                }
+        
+        // Mapeamos los verdaderos dueños de la blockchain
+        ownersList.forEach(ownerInfo => {
+            const wallet = (ownerInfo.owner || ownerInfo.address || "").toLowerCase();
+            const cantidad = parseInt(ownerInfo.balance || ownerInfo.token_count || 1);
+            
+            if (wallet && wallet !== "0x0000000000000000000000000000000000000000") {
+                snapshotActual[wallet] = cantidad;
             }
         });
+
+        // Verificación por si la estructura cambia en la API pública
+        if (Object.keys(snapshotActual).length === 0) {
+            throw new Error("No se pudieron extraer holders de la respuesta de la red.");
+        }
 
         console.log("⏳ Leyendo historial de puntos en Supabase...");
         const resPrevia = await fetch(`${SUPABASE_URL}/rest/v1/ograts_holders?select=address,puntos`, {
@@ -77,12 +58,12 @@ async function actualizarLeaderboard() {
             return {
                 address: wallet,
                 balance: nftsHoy,
-                puntos: puntosViejos + nftsHoy,
+                puntos: puntosViejos + nftsHoy, // Suma puntos reales diarios
                 updated_at: new Date().toISOString()
             };
         });
 
-        console.log(`⏳ Subiendo ${filasAInsertar.length} holders mapeados a Supabase...`);
+        console.log(`⏳ Subiendo ${filasAInsertar.length} holders REALES a Supabase...`);
         
         const resInsert = await fetch(`${SUPABASE_URL}/rest/v1/ograts_holders`, {
             method: "POST",
@@ -97,10 +78,10 @@ async function actualizarLeaderboard() {
 
         if (!resInsert.ok) throw new Error(`Error en Supabase: ${resInsert.status}`);
 
-        console.log("✅ ¡Sincronización completada con éxito!");
+        console.log("✅ ¡Sincronización REAL completada con éxito!");
 
     } catch (error) {
-        console.error("❌ Error definitivo:", error.message);
+        console.error("❌ Error:", error.message);
         process.exit(1);
     }
 }
