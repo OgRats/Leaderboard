@@ -1,16 +1,18 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const OPENSEA_API_KEY = process.env.OPENSEA_API_KEY || "";
-const contratoOgRats = "0x953E34637cC596B8195Eb7FB83305402d3B9D000";
+
+// Slug oficial extraído de tu URL de OpenSea
+const coleccionSlug = "ograts"; 
 
 async function actualizarLeaderboard() {
     try {
         const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
 
-        console.log("⏳ Consultando los Top Holders en OpenSea...");
+        console.log(`⏳ Consultando el Top 50 de holders de la colección "${coleccionSlug}" en OpenSea...`);
         
-        // Endpoint oficial de OpenSea para traer la clasificación de dueños de la colección
-        const urlAPI = `https://api.opensea.io/api/v2/chain/ronin/contract/${contratoOgRats}/owners?limit=50`;
+        // Endpoint oficial v2 de OpenSea para traer los dueños ordenados
+        const urlAPI = `https://api.opensea.io/api/v2/collections/${coleccionSlug}/owners?limit=50`;
         
         const responseOS = await fetch(urlAPI, { 
             method: "GET", 
@@ -21,17 +23,17 @@ async function actualizarLeaderboard() {
         });
 
         if (!responseOS.ok) {
-            throw new Error(`OpenSea respondió con estado ${responseOS.status}. Verifica tu API Key.`);
+            throw new Error(`OpenSea respondió con estado ${responseOS.status}. Verifica tu API Key o el tráfico.`);
         }
 
         const json = await responseOS.json();
         const owners = json.owners || [];
 
         if (owners.length === 0) {
-            throw new Error("OpenSea no devolvió ningún holder para esta colección.");
+            throw new Error("OpenSea no devolvió ningún holder en la respuesta.");
         }
 
-        // 1. Mapear los balances actuales del Top de OpenSea
+        // 1. Mapear los balances actuales del Top 50
         const snapshotActual = {};
         owners.forEach(ownerInfo => {
             const wallet = (ownerInfo.owner || "").toLowerCase();
@@ -68,7 +70,7 @@ async function actualizarLeaderboard() {
             };
         });
 
-        console.log(`⏳ Actualizando la base de datos de Supabase...`);
+        console.log(`⏳ Actualizando la base de datos de Supabase con datos reales...`);
         
         const resInsert = await fetch(`${SUPABASE_URL}/rest/v1/ograts_holders`, {
             method: "POST",
