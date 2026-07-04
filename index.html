@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OgRats Holders Leaderboard</title>
+    <style>
+        /* Estilos oscuros modernos estilo Web3 */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0b0e14;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            color: #22c55e; /* Verde brillante como tu check 💚 */
+            margin-bottom: 5px;
+        }
+        p {
+            color: #94a3b8;
+            margin-bottom: 25px;
+        }
+        .leaderboard-container {
+            width: 100%;
+            max-width: 600px;
+            background-color: #111827;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            border: 1px solid #1f2937;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+        th, td {
+            padding: 14px 20px;
+            border-bottom: 1px solid #1f2937;
+        }
+        th {
+            background-color: #1f2937;
+            color: #94a3b8;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        tr:hover {
+            background-color: #1e293b;
+        }
+        .rank {
+            font-weight: bold;
+            color: #f59e0b;
+            width: 50px;
+        }
+        .address {
+            font-family: monospace;
+            color: #38bdf8;
+        }
+        .balance {
+            text-align: right;
+            font-weight: bold;
+            color: #22c55e;
+        }
+        th.text-right {
+            text-align: right;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #94a3b8;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🏆 OgRats Holders Leaderboard</h1>
+    <p>Actualizado automáticamente cada día</p>
+
+    <div class="leaderboard-container">
+        <table>
+            <thead>
+                <tr>
+                    <th class="rank">Pos</th>
+                    <th>Billetera (Address)</th>
+                    <th class="text-right">NFTs (Balance)</th>
+                </tr>
+            </thead>
+            <tbody id="leaderboard-body">
+                <tr>
+                    <td colspan="3" class="loading">Cargando holders desde Supabase...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // CONFIGURACIÓN DE TU SUPABASE - ¡DATOS CORRECTOS AGREGADOS!
+        const SUPABASE_URL = "https://bcclyutxzbbgvarypfwd.supabase.co";
+        const SUPABASE_ANON_KEY = "EyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJjY2x5dXR4emJiZ3ZhcnlwZndkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwOTY1NDksImV4cCI6MjA5ODY3MjU0OX0.4DUTMdbttMB-Yk25qB5rUlLkV0DgKDWNcuuwjI2rK6E"; 
+
+        async function cargarLeaderboard() {
+            const tablaBody = document.getElementById('leaderboard-body');
+            
+            try {
+                // Consulta directa ordenando por balance descendente
+                const url = `${SUPABASE_URL}/rest/v1/ograts_holders?select=address,balance&order=balance.desc`;
+                
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                });
+
+                if (!response.ok) throw new Error('Error al conectar con Supabase');
+
+                const data = await response.json();
+                tablaBody.innerHTML = ''; 
+
+                if (data.length === 0) {
+                    tablaBody.innerHTML = '<tr><td colspan="3" class="loading">No hay datos disponibles en este momento.</td></tr>';
+                    return;
+                }
+
+                // Generamos cada fila en la tabla
+                data.forEach((holder, index) => {
+                    const fila = document.createElement('tr');
+                    
+                    // Formato bonito de la wallet (Ej: 0x1234...abcd)
+                    const walletCorta = holder.address.substring(0, 6) + '...' + holder.address.substring(holder.address.length - 4);
+
+                    fila.innerHTML = `
+                        <td class="rank">#${index + 1}</td>
+                        <td class="address" title="${holder.address}">${walletCorta}</td>
+                        <td class="balance">${holder.balance}</td>
+                    `;
+                    tablaBody.appendChild(fila);
+                });
+
+            } catch (error) {
+                console.error(error);
+                tablaBody.innerHTML = '<tr><td colspan="3" class="loading" style="color: #ef4444;">❌ Error al cargar los datos.</td></tr>';
+            }
+        }
+
+        cargarLeaderboard();
+    </script>
+</body>
+  </html>
+  
