@@ -2,7 +2,6 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const OPENSEA_API_KEY = process.env.OPENSEA_API_KEY || "";
 
-// El slug extraído de tu URL: https://opensea.io/collection/ograts/holders
 const coleccionSlug = "ograts"; 
 
 async function actualizarLeaderboard() {
@@ -11,35 +10,30 @@ async function actualizarLeaderboard() {
 
         console.log(`⏳ Extrayendo los Top Holders de la colección "${coleccionSlug}" directo de OpenSea...`);
         
-        // Endpoint oficial optimizado para traer el ranking de dueños (máximo de 50 para el top)
+        // Endpoint oficial v2 para traer la clasificación exacta de dueños (Pestaña /holders)
         const urlAPI = `https://api.opensea.io/api/v2/collections/${coleccionSlug}/owners?limit=50`;
         
         const responseOS = await fetch(urlAPI, { 
             method: "GET", 
             headers: { 
                 "Accept": "application/json", 
-                "X-API-KEY": OPENSEA_API_KEY,
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                "X-API-KEY": OPENSEA_API_KEY
             } 
         });
 
         if (!responseOS.ok) {
-            throw new Error(`OpenSea respondió con estado ${responseOS.status}. Comprueba que tu API Key esté bien configurada en los Secretos.`);
+            throw new Error(`OpenSea respondió con estado ${responseOS.status}.`);
         }
 
         const json = await responseOS.json();
-        
-        // OpenSea formatea la respuesta como un array 'owners'
         const ownersList = json.owners || json.results || [];
 
         if (ownersList.length === 0) {
-            throw new Error("La respuesta de OpenSea vino vacía o la estructura cambió.");
+            throw new Error("La respuesta de OpenSea vino vacía.");
         }
 
-        // 1. Mapeamos las wallets y sus respectivos balances del top
         const snapshotActual = {};
         ownersList.forEach(ownerInfo => {
-            // Soportamos múltiples variaciones del JSON de OpenSea para mayor resistencia
             const wallet = (ownerInfo.owner || ownerInfo.address || "").toLowerCase();
             const cantidad = parseInt(ownerInfo.balance || ownerInfo.token_count || 1);
             
@@ -48,9 +42,8 @@ async function actualizarLeaderboard() {
             }
         });
 
-        console.log(`📊 Éxito: Encontrados ${Object.keys(snapshotActual).length} holders en el Top de OpenSea.`);
+        console.log(`📊 Éxito: Encontrados ${Object.keys(snapshotActual).length} holders reales.`);
 
-        // 2. Traer los puntos acumulados históricos de Supabase
         console.log("⏳ Leyendo historial de puntos de Supabase...");
         const resPrevia = await fetch(`${SUPABASE_URL}/rest/v1/ograts_holders?select=address,puntos`, {
             method: "GET",
@@ -63,7 +56,6 @@ async function actualizarLeaderboard() {
             if (row.address) historialPuntos[row.address.toLowerCase()] = row.puntos || 0;
         });
 
-        // 3. Procesar las filas finales sumando el balance del día a los puntos acumulados
         const filasAInsertar = Object.keys(snapshotActual).map(wallet => {
             const nftsHoy = snapshotActual[wallet];
             const puntosViejos = historialPuntos[wallet] || 0;
@@ -76,7 +68,6 @@ async function actualizarLeaderboard() {
         });
 
         console.log(`⏳ Subiendo datos reales a tu Supabase...`);
-        
         const resInsert = await fetch(`${SUPABASE_URL}/rest/v1/ograts_holders`, {
             method: "POST",
             headers: {
@@ -88,10 +79,7 @@ async function actualizarLeaderboard() {
             body: JSON.stringify(filasAInsertar)
         });
 
-        if (!resInsert.ok) {
-            const errorTxt = await resInsert.text();
-            throw new Error(`Supabase rechazó los datos: ${errorTxt}`);
-        }
+        if (!resInsert.ok) throw new Error("Error escribiendo los datos en Supabase.");
 
         console.log("✅ ¡Sincronización del Top 50 completada con éxito!");
 
