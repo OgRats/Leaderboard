@@ -1,55 +1,40 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const API_KEY_RONIN = process.env.RONIN_API_KEY;
+const OPENSEA_API_KEY = process.env.OPENSEA_API_KEY || "";
 const contratoOgRats = "0x953e34637cc596b8195eb7fb83305402d3b9d000";
 
 async function actualizarLeaderboard() {
     try {
         const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
 
-        console.log("⏳ Conectando con el Marketplace de Ronin...");
+        // 1. Conexión limpia y directa a OpenSea (Red Ronin)
+        console.log("⏳ Conectando directamente con la API de OpenSea...");
         
-        // CAMBIO DE ENDPOINT: Usamos la consulta optimizada para traer los dueños directos
-        const urlAPI = `https://api-gateway.skymavis.com/skynet/ronin/web3/v2/contracts/${contratoOgRats}/tokens?limit=100`;
+        const urlAPI = `https://api.opensea.io/api/v2/chain/ronin/contract/${contratoOgRats}/nfts?limit=100`;
         
-        const responseRonin = await fetch(urlAPI, {
-            method: "GET",
-            headers: { 
-                "Accept": "application/json", 
-                "X-API-KEY": API_KEY_RONIN 
-            }
-        });
+        const headers = { 
+            "Accept": "application/json",
+            "X-API-KEY": OPENSEA_API_KEY
+        };
 
-        const json = await responseRonin.json();
-        console.log("🔍 NUEVA RESPUESTA DE RONIN:", JSON.stringify(json));
+        const responseOS = await fetch(urlAPI, { method: "GET", headers: headers });
 
-        if (!responseRonin.ok) {
-            throw new Error(`Ronin respondió con estado ${responseRonin.status}`);
-        }
-        
-        // Extraer lista de cualquier estructura posible
-        let tokens = [];
-        if (json && json.result && Array.isArray(json.result.items)) {
-            tokens = json.result.items;
-        } else if (json && Array.isArray(json.result)) {
-            tokens = json.result;
-        } else if (json && Array.isArray(json.items)) {
-            tokens = json.items;
+        if (!responseOS.ok) {
+            const errorTexto = await responseOS.text();
+            console.log("🔍 RESPUESTA DETALLADA DE OPENSEA:", errorTexto);
+            throw new Error(`OpenSea respondió con estado ${responseOS.status}`);
         }
 
-        // Si sigue viniendo vacío para pruebas, generamos una lista simulada real para que tu Supabase y tu Web funcionen de inmediato
-        if (!Array.isArray(tokens) || tokens.length === 0) {
-            console.log("⚠️ La API sigue vacía en producción. Activando datos de respaldo seguros...");
-            tokens = [
-                { owner: "0x1111111111111111111111111111111111111111" },
-                { owner: "0x2222222222222222222222222222222222222222" },
-                { owner: "0x3333333333333333333333333333333333333333" }
-            ];
+        const json = await responseOS.json();
+        const nfts = json.nfts || [];
+
+        if (nfts.length === 0) {
+            throw new Error("No se encontraron NFTs en la respuesta de OpenSea.");
         }
 
         const mapaBalances = {};
-        tokens.forEach(token => {
-            const owner = token.owner || token.minterAddress || "";
+        nfts.forEach(nft => {
+            const owner = nft.owner || "";
             if (owner && owner !== "0x0000000000000000000000000000000000000000") {
                 const wallet = owner.toLowerCase();
                 mapaBalances[wallet] = (mapaBalances[wallet] || 0) + 1;
@@ -62,7 +47,8 @@ async function actualizarLeaderboard() {
             updated_at: new Date().toISOString()
         }));
 
-        console.log(`⏳ Subiendo ${filasAInsertar.length} holders a Supabase...`);
+        // 2. Sincronizar los datos limpios en Supabase
+        console.log(`⏳ Subiendo ${filasAInsertar.length} holders mapeados desde OpenSea a Supabase...`);
         
         await fetch(`${SUPABASE_URL}/rest/v1/ograts_holders?address=not.eq.0x0`, {
             method: "DELETE",
@@ -87,7 +73,7 @@ async function actualizarLeaderboard() {
             throw new Error(`Error insertando en Supabase: ${resInsert.status}`);
         }
 
-        console.log("✅ ¡Supabase se ha actualizado correctamente!");
+        console.log("✅ ¡Sincronización vía OpenSea completada con éxito!");
 
     } catch (error) {
         console.error("❌ Ocurrió un error en la sincronización:", error.message);
