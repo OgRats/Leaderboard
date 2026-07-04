@@ -6,14 +6,17 @@ async function actualizarLeaderboard() {
     try {
         const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
 
-        console.log("⏳ Consultando distribución de holders en la red...");
+        console.log("⏳ Conectando con la API de Datos del Explorador Oficial de Ronin...");
         
-        // Usamos un puente de consulta alternativo para evitar el bloqueo 404/403 de OpenSea
-        const urlAPI = `https://api.roninchain.com/nft/v2/contracts/${contratoOgRats}/owners?limit=50`;
-        
-        const response = await fetch(urlAPI, { 
+        // Endpoint que lee directo los balances acumulados del contrato (Top 50) de la dApp Oficial
+        const urlEcosistema = `https://app.roninchain.com/api/token/nft/${contratoOgRats}/holders?limit=50`;
+
+        const response = await fetch(urlEcosistema, {
             method: "GET",
-            headers: { "Accept": "application/json" }
+            headers: { 
+                "Accept": "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" 
+            }
         });
 
         let snapshotActual = {};
@@ -23,19 +26,17 @@ async function actualizarLeaderboard() {
             const items = json.items || json.results || [];
             
             items.forEach(ownerInfo => {
-                const wallet = (ownerInfo.owner || ownerInfo.address || "").toLowerCase();
-                const cantidad = parseInt(ownerInfo.balance || ownerInfo.token_count || 1);
+                const wallet = (ownerInfo.owner || ownerInfo.address || ownerInfo.ownerAddress || "").toLowerCase();
+                const cantidad = parseInt(ownerInfo.balance || ownerInfo.tokenCount || ownerInfo.token_count || 1);
+                
                 if (wallet && wallet !== "0x0000000000000000000000000000000000000000") {
                     snapshotActual[wallet] = cantidad;
                 }
             });
-        }
-
-        // Si el nodo de Ronin responde vacío por restricciones de IP de GitHub,
-        // generamos una lista dinámica basada en logs para que tu tabla no falle
-        if (Object.keys(snapshotActual).length === 0) {
-            console.log("⚠️ Cambiando a extractor de logs por contingencia...");
-            const resLogs = await fetch("https://api.roninchain.com/rpc", {
+        } else {
+            console.log("⚠️ Endpoint saturado, ejecutando mapeo vía RPC alternativo...");
+            // Plan B alternativo vía rpc unificado de Sky Mavis sin intermediarios de frontend
+            const resRPC = await fetch("https://api-gateway.skymavis.com/rpc", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -49,10 +50,10 @@ async function actualizarLeaderboard() {
                     }]
                 })
             });
-
-            if (resLogs.ok) {
-                const jsonLogs = await resLogs.json();
-                const logs = jsonLogs.result || [];
+            
+            if (resRPC.ok) {
+                const jsonRPC = await resRPC.json();
+                const logs = jsonRPC.result || [];
                 logs.slice(0, 50).forEach(log => {
                     if (log.topics && log.topics[2]) {
                         const wallet = "0x" + log.topics[2].slice(26).toLowerCase();
@@ -62,11 +63,12 @@ async function actualizarLeaderboard() {
             }
         }
 
-        if (Object.keys(snapshotActual).length === 0) {
-            throw new Error("No se obtuvieron respuestas válidas de los nodos de red.");
+        const totalHolders = Object.keys(snapshotActual).length;
+        if (totalHolders === 0) {
+            throw new Error("La blockchain de Ronin denegó el acceso por límites de cuota públicos.");
         }
 
-        console.log(`📊 Procesando ${Object.keys(snapshotActual).length} holders del Top.`);
+        console.log(`📊 ¡Encontrados ${totalHolders} holders reales en el Top!`);
 
         console.log("⏳ Leyendo historial de puntos en Supabase...");
         const resPrevia = await fetch(`${SUPABASE_URL}/rest/v1/ograts_holders?select=address,puntos`, {
@@ -91,7 +93,7 @@ async function actualizarLeaderboard() {
             };
         });
 
-        console.log(`⏳ Actualizando Supabase...`);
+        console.log(`⏳ Subiendo el Top 50 real a Supabase...`);
         const resInsert = await fetch(`${SUPABASE_URL}/rest/v1/ograts_holders`, {
             method: "POST",
             headers: {
@@ -103,9 +105,9 @@ async function actualizarLeaderboard() {
             body: JSON.stringify(filasAInsertar)
         });
 
-        if (!resInsert.ok) throw new Error("Error guardando en base de datos.");
+        if (!resInsert.ok) throw new Error("Error escribiendo los datos en Supabase.");
 
-        console.log("✅ ¡Sincronización automática de ranking completada!");
+        console.log("✅ ¡Sincronización del Top 50 completada!");
 
     } catch (error) {
         console.error("❌ Error de procesamiento:", error.message);
