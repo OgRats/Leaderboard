@@ -6,49 +6,83 @@ async function actualizarLeaderboard() {
     try {
         const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
 
-        console.log("⏳ Conectando con el nodo alternativo de Ronin Chain...");
+        console.log("⏳ Extrayendo holders reales en vivo desde la blockchain de Ronin...");
         
-        // Usamos la API del explorador oficial que es de acceso libre y estable
-        const urlExplorador = `https://api-gateway.roninchain.com/rpc/ronin/mainnet/v3/contracts/${contratoOgRats}/owners?limit=100`;
-
-        const response = await fetch(urlExplorador, {
-            method: "GET",
-            headers: { 
-                "Accept": "application/json",
-                "User-Agent": "Mozilla/5.0"
-            }
-        });
-
         let snapshotActual = {};
+        let errorEnRed = false;
 
-        if (response.ok) {
-            const json = await response.json();
-            const items = json.items || json.results || [];
-            
-            items.forEach(ownerInfo => {
-                const wallet = (ownerInfo.owner || ownerInfo.address || "").toLowerCase();
-                const cantidad = parseInt(ownerInfo.balance || ownerInfo.token_count || 1);
-                
-                if (wallet && wallet !== "0x0000000000000000000000000000000000000000") {
-                    snapshotActual[wallet] = cantidad;
-                }
+        // Intentamos usar el indexador público descentralizado alternativo para Ronin
+        try {
+            const urlNFT = `https://api.roninchain.com/nft/v2/contracts/${contratoOgRats}/owners?limit=100`;
+            const response = await fetch(urlNFT, {
+                method: "GET",
+                headers: { "Accept": "application/json" }
             });
+
+            if (response.ok) {
+                const json = await response.json();
+                const items = json.items || json.results || [];
+                
+                items.forEach(ownerInfo => {
+                    const wallet = (ownerInfo.owner || ownerInfo.address || "").toLowerCase();
+                    const cantidad = parseInt(ownerInfo.balance || ownerInfo.token_count || 1);
+                    
+                    if (wallet && wallet !== "0x0000000000000000000000000000000000000000") {
+                        snapshotActual[wallet] = cantidad;
+                    }
+                });
+            } else {
+                errorEnRed = true;
+            }
+        } catch (e) {
+            errorEnRed = true;
         }
 
-        // Si la API del explorador está bloqueada por región en GitHub Actions,
-        // inyectamos las billeteras reales de tus principales holders manualmente para activar la web al 100%
-        if (Object.keys(snapshotActual).length === 0) {
-            console.log("⚠️ Limitación de API de red detectada. Cargando base de holders oficial mapeada...");
+        // Si los nodos globales fallan o dan 404, usamos el extractor RPC por lotes agregados
+        if (errorEnRed || Object.keys(snapshotActual).length === 0) {
+            console.log("⏳ Aplicando extractor RPC alternativo optimizado por bloques...");
+            const urlRPC = "https://api.roninchain.com/rpc";
             
-            // TODO: Puedes poner aquí un par de direcciones reales de tus holders para probar si deseas
-            snapshotActual = {
-                "0x71c7656ec7ab88b098defb751b7401b5f6d8976f": 5,
-                "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266": 3,
-                "0x70997970c51812dc3a010c7d01b50e0d17dc79c8": 2
+            const dataRPC = {
+                jsonrpc: "2.0",
+                id: 1,
+                method: "eth_getLogs",
+                params: [{
+                    address: contratoOgRats,
+                    fromBlock: "latest", // Captura la actividad más reciente del contrato
+                    topics: ["0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"]
+                }]
             };
+
+            const responseRPC = await fetch(urlRPC, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(dataRPC)
+            });
+
+            if (responseRPC.ok) {
+                const jsonRPC = await responseRPC.json();
+                const logs = jsonRPC.result || [];
+                
+                logs.forEach(log => {
+                    if (log.topics && log.topics[2]) {
+                        const walletDestino = "0x" + log.topics[2].slice(26).toLowerCase();
+                        if (walletDestino !== "0x0000000000000000000000000000000000000000") {
+                            snapshotActual[walletDestino] = (snapshotActual[walletDestino] || 0) + 1;
+                        }
+                    }
+                });
+            }
         }
 
-        console.log("⏳ Leyendo historial de puntos en Supabase...");
+        const totalHolders = Object.keys(snapshotActual).length;
+        if (totalHolders === 0) {
+            throw new Error("No se pudieron recuperar datos automáticos de la red Ronin en este ciclo.");
+        }
+
+        console.log(`📊 Sincronizados automáticamente ${totalHolders} holders activos de la colección.`);
+
+        console.log("⏳ Consultando historial de puntuación en Supabase...");
         const resPrevia = await fetch(`${SUPABASE_URL}/rest/v1/ograts_holders?select=address,puntos`, {
             method: "GET",
             headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` }
@@ -57,7 +91,7 @@ async function actualizarLeaderboard() {
         const datosViejos = resPrevia.ok ? await resPrevia.json() : [];
         const historialPuntos = {};
         datosViejos.forEach(row => {
-            historialPuntos[row.address.toLowerCase()] = row.puntos || 0;
+            if (row.address) historialPuntos[row.address.toLowerCase()] = row.puntos || 0;
         });
 
         const filasAInsertar = Object.keys(snapshotActual).map(wallet => {
@@ -71,7 +105,7 @@ async function actualizarLeaderboard() {
             };
         });
 
-        console.log(`⏳ Actualizando Supabase...`);
+        console.log(`⏳ Subiendo cambios a la base de datos de Supabase...`);
         const resInsert = await fetch(`${SUPABASE_URL}/rest/v1/ograts_holders`, {
             method: "POST",
             headers: {
@@ -83,12 +117,12 @@ async function actualizarLeaderboard() {
             body: JSON.stringify(filasAInsertar)
         });
 
-        if (!resInsert.ok) throw new Error(`Error en Supabase: ${resInsert.status}`);
+        if (!resInsert.ok) throw new Error("Error en la pasarela de Supabase.");
 
-        console.log("✅ ¡Sincronización asegurada completada con éxito!");
+        console.log("✅ ¡Sincronización masiva completada con éxito!");
 
     } catch (error) {
-        console.error("❌ Error de procesamiento:", error.message);
+        console.error("❌ Detener:", error.message);
         process.exit(1);
     }
 }
